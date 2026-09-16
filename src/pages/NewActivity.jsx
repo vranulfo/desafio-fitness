@@ -11,6 +11,8 @@ const fieldClass = 'mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03
 function NewActivity({ onAddActivity }) {
   const [form, setForm] = useState(INITIAL_FORM)
   const [errors, setErrors] = useState({})
+  const [submitError, setSubmitError] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const navigate = useNavigate()
   const selectedType = getActivityType(form.type)
   const previewActivity = { type: form.type, duration: form.duration }
@@ -20,6 +22,7 @@ function NewActivity({ onAddActivity }) {
     const { name, value, files } = event.target
     setForm((current) => ({ ...current, [name]: files ? files[0] ?? null : value }))
     setErrors((current) => ({ ...current, [name]: undefined }))
+    setSubmitError('')
   }
 
   function validate() {
@@ -29,26 +32,33 @@ function NewActivity({ onAddActivity }) {
     if (form.type === 'walking' && (!form.duration || Number(form.duration) <= 0)) nextErrors.duration = 'Informe a duração da caminhada.'
     if (form.type === 'other' && !form.customType.trim()) nextErrors.customType = 'Informe o nome da atividade.'
     if (!form.proof) nextErrors.proof = 'Adicione uma foto de comprovação.'
+    if (form.proof && !form.proof.type.startsWith('image/')) nextErrors.proof = 'Selecione um arquivo de imagem válido.'
     setErrors(nextErrors)
     return Object.keys(nextErrors).length === 0
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
-    if (!validate()) return
+    if (isSubmitting || !validate()) return
     const activity = {
-      id: crypto.randomUUID(),
       type: form.type,
       customType: form.customType.trim() || null,
       date: form.date,
       duration: form.duration ? Number(form.duration) : null,
       note: form.note.trim() || null,
-      proofStatus: 'local',
-      proofName: form.proof.name,
       countsTowardGoal: counts,
     }
-    onAddActivity(activity)
-    navigate('/')
+
+    setIsSubmitting(true)
+    setSubmitError('')
+    try {
+      await onAddActivity(activity, form.proof)
+      navigate('/')
+    } catch (error) {
+      setSubmitError(error.message || 'Não foi possível registrar a atividade. Tente novamente.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -63,10 +73,11 @@ function NewActivity({ onAddActivity }) {
           {form.type === 'walking' && <Field label="Duração (minutos)" error={errors.duration} hint="Caminhadas contam a partir de 30 minutos."><input name="duration" type="number" min="1" inputMode="numeric" value={form.duration} onChange={updateField} placeholder="Ex.: 45" className={fieldClass} /></Field>}
           {form.type === 'other' && <Field label="Nome da atividade" error={errors.customType}><input name="customType" value={form.customType} onChange={updateField} placeholder="Ex.: Yoga" className={fieldClass} /></Field>}
           {selectedType && <div className="sm:col-span-2"><div className={`flex items-start gap-3 rounded-xl border p-4 text-sm ${counts ? 'border-lime-brand/15 bg-lime-brand/6 text-lime-brand' : 'border-amber-300/15 bg-amber-300/5 text-amber-100'}`}><Icon name={counts ? 'check' : 'activity'} className="mt-0.5 h-4 w-4 shrink-0" /><div><strong className="font-semibold">{counts ? 'Esta atividade conta para sua meta.' : 'Esta atividade não conta para sua meta.'}</strong><p className="mt-1 text-xs opacity-70">{getRuleMessage(form.type, form.duration)}</p></div></div></div>}
-          <div className="sm:col-span-2"><Field label="Foto de comprovação" error={errors.proof} hint="Formatos de imagem. O arquivo fica apenas nesta sessão."><label className="mt-2 flex cursor-pointer items-center gap-4 rounded-xl border border-dashed border-white/15 bg-white/[0.025] p-4 transition hover:border-lime-brand/40"><span className="grid h-11 w-11 place-items-center rounded-xl bg-white/5 text-stone-400"><Icon name="image" /></span><span className="min-w-0"><span className="block truncate text-sm font-medium text-white">{form.proof?.name ?? 'Escolher uma foto'}</span><span className="mt-1 block text-xs text-stone-500">Toque para selecionar do dispositivo</span></span><input name="proof" type="file" accept="image/*" onChange={updateField} className="sr-only" /></label></Field></div>
+          <div className="sm:col-span-2"><Field label="Foto de comprovação" error={errors.proof} hint="A imagem será armazenada com acesso privado."><label className="mt-2 flex cursor-pointer items-center gap-4 rounded-xl border border-dashed border-white/15 bg-white/[0.025] p-4 transition hover:border-lime-brand/40"><span className="grid h-11 w-11 place-items-center rounded-xl bg-white/5 text-stone-400"><Icon name="image" /></span><span className="min-w-0"><span className="block truncate text-sm font-medium text-white">{form.proof?.name ?? 'Escolher uma foto'}</span><span className="mt-1 block text-xs text-stone-500">Toque para selecionar do dispositivo</span></span><input name="proof" type="file" accept="image/*" onChange={updateField} className="sr-only" /></label></Field></div>
           <div className="sm:col-span-2"><Field label="Observação (opcional)"><textarea name="note" value={form.note} onChange={updateField} rows="4" placeholder="Como foi o treino?" className={`${fieldClass} resize-none`} /></Field></div>
         </div>
-        <div className="mt-8 flex flex-col-reverse gap-3 border-t border-white/8 pt-6 sm:flex-row sm:justify-end"><button type="button" onClick={() => navigate('/')} className="rounded-xl px-5 py-3 text-sm font-semibold text-stone-400 hover:bg-white/5 hover:text-white">Cancelar</button><button type="submit" className="flex items-center justify-center gap-2 rounded-xl bg-lime-brand px-6 py-3 text-sm font-bold text-[#0b100c] transition hover:bg-[#d8ff70]">Salvar atividade <Icon name="arrow" className="h-4 w-4" /></button></div>
+        {submitError && <div className="mt-6 rounded-xl border border-red-300/15 bg-red-300/5 p-4 text-sm text-red-100" role="alert">{submitError}</div>}
+        <div className="mt-8 flex flex-col-reverse gap-3 border-t border-white/8 pt-6 sm:flex-row sm:justify-end"><button type="button" disabled={isSubmitting} onClick={() => navigate('/')} className="rounded-xl px-5 py-3 text-sm font-semibold text-stone-400 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50">Cancelar</button><button type="submit" disabled={isSubmitting} className="flex items-center justify-center gap-2 rounded-xl bg-lime-brand px-6 py-3 text-sm font-bold text-[#0b100c] transition hover:bg-[#d8ff70] disabled:cursor-wait disabled:opacity-60">{isSubmitting ? 'Enviando...' : 'Salvar atividade'} {!isSubmitting && <Icon name="arrow" className="h-4 w-4" />}</button></div>
       </form>
     </div>
   )
