@@ -14,10 +14,22 @@ function ActivityCard({ activity, compact = false }) {
           <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${counts ? 'bg-lime-brand/10 text-lime-brand' : 'bg-white/5 text-stone-400'}`}>{counts ? 'Conta para a meta' : 'Não conta'}</span>
         </div>
         {!compact && activity.note && <p className="mt-3 text-sm leading-6 text-stone-400">{activity.note}</p>}
-        {!compact && <div className="mt-3 flex items-center gap-2 text-xs text-stone-500"><Icon name="image" className="h-4 w-4" />{activity.proofStatus === 'external' ? 'Comprovação enviada pelo WhatsApp' : `Foto anexada${activity.proofName ? ` · ${activity.proofName}` : ''}`}</div>}
+        {!compact && activity.signedPhotoUrl && (
+          <a href={activity.signedPhotoUrl} target="_blank" rel="noreferrer" className="mt-4 block w-fit overflow-hidden rounded-xl border border-white/10 transition hover:border-lime-brand/30">
+            <img src={activity.signedPhotoUrl} alt={`Comprovação de ${getActivityLabel(activity)}`} className="h-28 w-40 object-cover" loading="lazy" />
+          </a>
+        )}
+        {!compact && <div className="mt-3 flex items-center gap-2 text-xs text-stone-500"><Icon name="image" className="h-4 w-4" />{getProofLabel(activity)}</div>}
       </div>
     </article>
   )
+}
+
+function getProofLabel(activity) {
+  if (activity.proofStatus === 'external') return 'Comprovação enviada pelo WhatsApp'
+  if (activity.signedPhotoUrl) return 'Foto armazenada com acesso privado'
+  if (activity.photoPath) return 'Foto privada temporariamente indisponível'
+  return 'Sem comprovação disponível'
 }
 
 export default ActivityCard
